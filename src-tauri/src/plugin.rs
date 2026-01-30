@@ -1,0 +1,128 @@
+// Plugin installation management for stud-bridge
+// Handles checking if plugin is installed and installing it to Roblox Plugins folder
+
+use std::fs;
+use std::path::PathBuf;
+
+// Embed the plugin source directly in the binary
+const PLUGIN_SOURCE: &str = include_str!("../../studio-plugin/stud-bridge.server.lua");
+const PLUGIN_FILENAME: &str = "stud-bridge.server.lua";
+
+/// Get the Roblox Plugins folder path for the current platform
+fn get_plugins_folder() -> Option<PathBuf> {
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(home) = dirs::home_dir() {
+            return Some(home.join("Documents").join("Roblox").join("Plugins"));
+        }
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(local_app_data) = dirs::data_local_dir() {
+            return Some(local_app_data.join("Roblox").join("Plugins"));
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    {
+        // Roblox Studio doesn't officially support Linux, but some use Wine
+        if let Some(home) = dirs::home_dir() {
+            return Some(
+                home.join(".wine")
+                    .join("drive_c")
+                    .join("users")
+                    .join("Public")
+                    .join("Documents")
+                    .join("Roblox")
+                    .join("Plugins"),
+            );
+        }
+    }
+
+    None
+}
+
+/// Check if the stud-bridge plugin is installed
+#[tauri::command]
+pub fn check_plugin_installed() -> Result<PluginStatus, String> {
+    let plugins_folder = get_plugins_folder()
+        .ok_or_else(|| "Could not determine Roblox Plugins folder".to_string())?;
+
+    let plugin_path = plugins_folder.join(PLUGIN_FILENAME);
+
+    if plugin_path.exists() {
+        // Check if it's the current version by comparing content
+        if let Ok(existing_content) = fs::read_to_string(&plugin_path) {
+            let is_current = existing_content.trim() == PLUGIN_SOURCE.trim();
+            Ok(PluginStatus {
+                installed: true,
+                path: plugin_path.to_string_lossy().to_string(),
+                is_current_version: is_current,
+                plugins_folder: plugins_folder.to_string_lossy().to_string(),
+            })
+        } else {
+            Ok(PluginStatus {
+                installed: true,
+                path: plugin_path.to_string_lossy().to_string(),
+                is_current_version: false, // Can't read, assume outdated
+                plugins_folder: plugins_folder.to_string_lossy().to_string(),
+            })
+        }
+    } else {
+        Ok(PluginStatus {
+            installed: false,
+            path: plugin_path.to_string_lossy().to_string(),
+            is_current_version: false,
+            plugins_folder: plugins_folder.to_string_lossy().to_string(),
+        })
+    }
+}
+
+/// Install the stud-bridge plugin to the Roblox Plugins folder
+#[tauri::command]
+pub fn install_plugin() -> Result<InstallResult, String> {
+    let plugins_folder = get_plugins_folder()
+        .ok_or_else(|| "Could not determine Roblox Plugins folder".to_string())?;
+
+    // Create the Plugins folder if it doesn't exist
+    if !plugins_folder.exists() {
+        fs::create_dir_all(&plugins_folder)
+            .map_err(|e| format!("Failed to create Plugins folder: {}", e))?;
+    }
+
+    let plugin_path = plugins_folder.join(PLUGIN_FILENAME);
+
+    // Write the plugin file
+    fs::write(&plugin_path, PLUGIN_SOURCE)
+        .map_err(|e| format!("Failed to write plugin file: {}", e))?;
+
+    Ok(InstallResult {
+        success: true,
+        path: plugin_path.to_string_lossy().to_string(),
+        message: "Plugin installed successfully. Restart Roblox Studio to load it.".to_string(),
+    })
+}
+
+/// Get the plugins folder path (for manual installation info)
+#[tauri::command]
+pub fn get_plugins_path() -> Result<String, String> {
+    get_plugins_folder()
+        .map(|p| p.to_string_lossy().to_string())
+        .ok_or_else(|| "Could not determine Roblox Plugins folder".to_string())
+}
+
+#[derive(serde::Serialize)]
+pub struct PluginStatus {
+    pub installed: bool,
+    pub path: String,
+    pub is_current_version: bool,
+    pub plugins_folder: String,
+}
+
+#[derive(serde::Serialize)]
+pub struct InstallResult {
+    pub success: bool,
+    pub path: String,
+    pub message: String,
+}
