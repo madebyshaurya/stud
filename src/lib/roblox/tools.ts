@@ -7,6 +7,7 @@
 import { tool } from "ai"
 import { z } from "zod"
 import { studioRequest, isStudioConnected, notConnectedError } from "./client"
+import { searchToolbox, getAssetDetails, type AssetCategory } from "./toolbox"
 
 // ============================================================================
 // Types
@@ -546,6 +547,86 @@ Example: Make all parts red and anchored
 })
 
 // ============================================================================
+// Toolbox Tools
+// ============================================================================
+
+export const robloxToolboxSearch = tool({
+  description: `Search the Roblox Creator Store for free models, decals, audio, or plugins.
+
+Use this to find pre-made assets that can be inserted into the game.
+Returns a list of assets with names, descriptions, and popularity info.
+
+Examples:
+- Search for "car" models
+- Search for "sword" audio
+- Search for "explosion" decals`,
+  inputSchema: z.object({
+    query: z.string().describe("Search query"),
+    category: z.enum(["Model", "Decal", "Audio", "Plugin", "MeshPart"]).default("Model").describe("Asset category"),
+    limit: z.number().default(10).describe("Max results (1-50)"),
+  }),
+  execute: async ({ query, category = "Model", limit = 10 }: { query: string; category?: AssetCategory; limit?: number }) => {
+    const result = await searchToolbox(query, category, Math.min(limit, 50));
+
+    if (result.assets.length === 0) {
+      return { message: `No ${category.toLowerCase()}s found for "${query}"`, results: [] };
+    }
+
+    return {
+      count: result.assets.length,
+      results: result.assets.map((asset) => ({
+        id: asset.id,
+        name: asset.name,
+        description: asset.description.slice(0, 100),
+        creator: asset.creatorName,
+        favorites: asset.favoriteCount,
+      })),
+    };
+  },
+});
+
+export const robloxInsertAsset = tool({
+  description: `Insert a free model from the Roblox Creator Store into the game.
+
+Use the asset ID from toolbox search results.
+The model will be inserted as a child of the specified parent.
+
+Note: Only free models can be inserted. Some models may contain scripts.`,
+  inputSchema: z.object({
+    assetId: z.number().describe("Asset ID from toolbox search"),
+    parent: z.string().default("game.Workspace").describe("Parent path for the inserted model"),
+  }),
+  execute: async ({ assetId, parent = "game.Workspace" }: { assetId: number; parent?: string }) => {
+    if (!(await isStudioConnected())) {
+      return { error: notConnectedError() };
+    }
+
+    // Get asset details first
+    const details = await getAssetDetails(assetId);
+    if (!details) {
+      return { error: `Could not find asset with ID ${assetId}` };
+    }
+
+    // Request Studio to insert the asset
+    const result = await studioRequest<{ path: string; name: string }>("/asset/insert", {
+      assetId,
+      parent,
+    });
+
+    if (!result.success) {
+      return { error: result.error };
+    }
+
+    return {
+      success: true,
+      path: result.data.path,
+      name: result.data.name,
+      assetName: details.name,
+    };
+  },
+});
+
+// ============================================================================
 // Agentic Tools
 // ============================================================================
 
@@ -634,6 +715,10 @@ export const robloxTools = {
   roblox_bulk_create: robloxBulkCreate,
   roblox_bulk_delete: robloxBulkDelete,
   roblox_bulk_set_property: robloxBulkSetProperty,
+
+  // Toolbox tools
+  roblox_toolbox_search: robloxToolboxSearch,
+  roblox_insert_asset: robloxInsertAsset,
 
   // Agentic tools
   roblox_ask_user: robloxAskUser,

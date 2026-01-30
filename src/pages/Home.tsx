@@ -386,11 +386,30 @@ export function Home() {
     if (!input.trim() || isStreaming) return;
 
     const userMessage = input.trim();
+
+    // Build context prefix based on active chips
+    const prefixes: string[] = [];
+    if (activeChips.includes("docs")) {
+      prefixes.push("[Search Roblox documentation first]");
+    }
+    if (activeChips.includes("web")) {
+      prefixes.push("[Search the web for information]");
+    }
+    if (activeChips.includes("search-models")) {
+      prefixes.push("[Search the Creator Store for free models if needed]");
+    }
+    if (activeChips.includes("plan")) {
+      prefixes.push("[Create a detailed plan before making changes]");
+    }
+    const chipContext = prefixes.join(" ");
+    const fullMessage = chipContext ? `${chipContext}\n\n${userMessage}` : userMessage;
+
     setInput("");
+    setActiveChips([]); // Clear chips after submit
 
-    console.log("[Home] Submitting message:", userMessage);
+    console.log("[Home] Submitting message:", userMessage, "with context:", chipContext);
 
-    // Add user message
+    // Add user message (show without context prefix for cleaner UI)
     addMessage({ role: "user", content: userMessage });
 
     // Add placeholder for assistant
@@ -402,7 +421,7 @@ export function Home() {
     try {
       const chatMessages = [
         ...messages.map((m) => ({ role: m.role, content: m.content })),
-        { role: "user" as const, content: userMessage },
+        { role: "user" as const, content: fullMessage },
       ];
 
       console.log("[Home] Sending", chatMessages.length, "messages to AI");
@@ -449,18 +468,24 @@ export function Home() {
       setError(errorMessage);
       setStreaming(false);
     }
-  }, [input, isStreaming, messages, addMessage, updateMessage, addToolCall, updateToolCall, setStreaming, setError, sendMessage]);
+  }, [input, isStreaming, messages, activeChips, addMessage, updateMessage, addToolCall, updateToolCall, setStreaming, setError, sendMessage]);
 
   const handleSuggestionClick = (suggestion: string) => {
     setInput(suggestion);
   };
 
   const handleChipClick = (chipId: ChipAction) => {
+    // Toggle chip
     setActiveChips(prev =>
       prev.includes(chipId)
         ? prev.filter(c => c !== chipId)
         : [...prev, chipId]
     );
+
+    // For "run-code" chip, pre-fill input template
+    if (chipId === "run-code" && !activeChips.includes(chipId)) {
+      setInput(prev => prev || "Run this code in Studio:\n```lua\n\n```");
+    }
   };
 
   const handleStop = () => {

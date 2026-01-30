@@ -951,6 +951,57 @@ handlers["/code/run"] = function(data)
 	return { output = table.concat(output, "\n") }
 end
 
+-- Asset insertion (from Creator Store)
+handlers["/asset/insert"] = function(data)
+	local parent = getInstanceFromPath(data.parent)
+	if not parent then
+		error("Parent not found: " .. data.parent)
+	end
+
+	local assetId = tonumber(data.assetId)
+	if not assetId then
+		error("Invalid asset ID: " .. tostring(data.assetId))
+	end
+
+	-- Use InsertService to get the asset
+	local InsertService = game:GetService("InsertService")
+	local success, model = pcall(function()
+		return InsertService:LoadAsset(assetId)
+	end)
+
+	if not success then
+		-- Try alternative method
+		success, model = pcall(function()
+			local objects = game:GetObjects("rbxassetid://" .. assetId)
+			if objects and #objects > 0 then
+				return objects[1]
+			end
+			error("No objects returned")
+		end)
+	end
+
+	if not success or not model then
+		error("Failed to load asset " .. assetId .. ": " .. tostring(model))
+	end
+
+	-- If it's a Model wrapper from InsertService, get the first child
+	local actualModel = model
+	if model:IsA("Model") and model.Name == "InsertedObjects" then
+		local children = model:GetChildren()
+		if #children > 0 then
+			actualModel = children[1]
+		end
+	end
+
+	actualModel.Parent = parent
+
+	return {
+		success = true,
+		path = getInstancePath(actualModel),
+		name = actualModel.Name,
+	}
+end
+
 -- Paths that modify the game and should create undo waypoints
 local modifyingPaths = {
 	["/script/set"] = true,
@@ -964,6 +1015,7 @@ local modifyingPaths = {
 	["/instance/bulk-delete"] = true,
 	["/instance/bulk-set"] = true,
 	["/code/run"] = true,
+	["/asset/insert"] = true,
 }
 
 -- Friendly names for activity log
@@ -985,6 +1037,7 @@ local actionNames = {
 	["/instance/search"] = "Search",
 	["/selection/get"] = "Get Selection",
 	["/code/run"] = "Run Code",
+	["/asset/insert"] = "Insert Asset",
 }
 
 -- HTTP request handler
