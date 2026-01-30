@@ -1,5 +1,5 @@
 import { Button } from "@/components/ui/button";
-import { Search, BookOpen, Globe, Play, FileText, Box } from "lucide-react";
+import { BookOpen, Globe, Play, FileText, Box } from "lucide-react";
 
 export type ChipAction = "search-models" | "docs" | "web" | "run-code" | "plan" | "toolbox";
 

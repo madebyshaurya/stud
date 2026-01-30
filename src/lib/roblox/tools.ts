@@ -546,6 +546,69 @@ Example: Make all parts red and anchored
 })
 
 // ============================================================================
+// Agentic Tools
+// ============================================================================
+
+// Global store reference for ask_user tool
+let askUserHandler: ((questions: Array<{ question: string; options?: string[]; type: "single" | "multi" | "text" }>) => Promise<(string | string[])[]>) | null = null;
+
+export const setAskUserHandler = (handler: typeof askUserHandler) => {
+  askUserHandler = handler;
+};
+
+export const robloxAskUser = tool({
+  description: `Ask the user questions when you need clarification or input.
+
+Use this tool when:
+- You need to understand user preferences before proceeding
+- There are multiple valid approaches and you want user input
+- You need specific parameters or values the user should decide
+- Confirming destructive actions before executing
+
+You can ask 1-4 questions at once. Each question can be:
+- Single choice: User picks one option
+- Multi choice: User can select multiple options
+- Text: User types a free-form answer
+
+Examples:
+- "What color should the car be?" with options ["Red", "Blue", "Green"]
+- "Do you want me to delete these parts?" with options ["Yes", "No"]
+- "What should the NPC say when clicked?" as text input`,
+  inputSchema: z.object({
+    questions: z
+      .array(
+        z.object({
+          question: z.string().describe("The question to ask the user"),
+          options: z.array(z.string()).optional().describe("Options for single/multi choice"),
+          type: z.enum(["single", "multi", "text"]).default("text").describe("Question type"),
+        })
+      )
+      .min(1)
+      .max(4)
+      .describe("1-4 questions to ask the user"),
+  }),
+  execute: async ({
+    questions,
+  }: {
+    questions: Array<{ question: string; options?: string[]; type: "single" | "multi" | "text" }>
+  }) => {
+    if (!askUserHandler) {
+      return { error: "Question handler not initialized" }
+    }
+
+    const answers = await askUserHandler(questions)
+
+    return {
+      answered: true,
+      questions: questions.map((q, i) => ({
+        question: q.question,
+        answer: answers[i],
+      })),
+    }
+  },
+})
+
+// ============================================================================
 // Export all tools
 // ============================================================================
 
@@ -571,4 +634,7 @@ export const robloxTools = {
   roblox_bulk_create: robloxBulkCreate,
   roblox_bulk_delete: robloxBulkDelete,
   roblox_bulk_set_property: robloxBulkSetProperty,
+
+  // Agentic tools
+  roblox_ask_user: robloxAskUser,
 }

@@ -2,7 +2,7 @@
 
 **The AI Agent for Roblox Studio** - Build games with AI that actually *does* things.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: AGPL-3.0](https://img.shields.io/badge/License-AGPL--3.0-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
 [![Made with Tauri](https://img.shields.io/badge/Made%20with-Tauri-blue)](https://tauri.app)
 [![React](https://img.shields.io/badge/React-19-61DAFB)](https://react.dev)
 

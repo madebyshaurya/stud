@@ -5,7 +5,7 @@ export interface ToolCall {
   name: string;
   args: Record<string, unknown>;
   result?: unknown;
-  status: "pending" | "running" | "complete" | "error";
+  status: "pending" | "running" | "complete" | "error" | "waiting";
   error?: string;
 }
 
@@ -17,11 +17,27 @@ export interface Message {
   createdAt: Date;
 }
 
+export interface Question {
+  question: string;
+  options?: string[];
+  type: "single" | "multi" | "text";
+}
+
+export interface PendingQuestion {
+  id: string;
+  toolCallId: string;
+  messageId: string;
+  questions: Question[];
+  answers?: (string | string[])[];
+}
+
 export interface ChatState {
   messages: Message[];
   isStreaming: boolean;
   error: string | null;
-  
+  pendingQuestion: PendingQuestion | null;
+  questionResolver: ((answers: (string | string[])[]) => void) | null;
+
   // Actions
   addMessage: (message: Omit<Message, "id" | "createdAt">) => string;
   updateMessage: (id: string, content: string) => void;
@@ -30,12 +46,19 @@ export interface ChatState {
   setStreaming: (streaming: boolean) => void;
   setError: (error: string | null) => void;
   clearMessages: () => void;
+
+  // Question handling
+  setPendingQuestion: (question: PendingQuestion | null) => void;
+  setQuestionResolver: (resolver: ((answers: (string | string[])[]) => void) | null) => void;
+  answerQuestion: (answers: (string | string[])[]) => void;
 }
 
-export const useChatStore = create<ChatState>()((set) => ({
+export const useChatStore = create<ChatState>()((set, get) => ({
   messages: [],
   isStreaming: false,
   error: null,
+  pendingQuestion: null,
+  questionResolver: null,
 
   addMessage: (message) => {
     const id = crypto.randomUUID();
@@ -89,4 +112,17 @@ export const useChatStore = create<ChatState>()((set) => ({
   setError: (error) => set({ error }),
 
   clearMessages: () => set({ messages: [] }),
+
+  // Question handling
+  setPendingQuestion: (question) => set({ pendingQuestion: question }),
+
+  setQuestionResolver: (resolver) => set({ questionResolver: resolver }),
+
+  answerQuestion: (answers) => {
+    const { questionResolver, pendingQuestion } = get();
+    if (questionResolver && pendingQuestion) {
+      questionResolver(answers);
+      set({ pendingQuestion: null, questionResolver: null });
+    }
+  },
 }));

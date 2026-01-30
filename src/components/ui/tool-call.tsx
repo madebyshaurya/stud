@@ -1,13 +1,13 @@
 import * as React from "react";
 import { cn } from "@/lib/utils";
 import { Loader } from "./loader";
-import { ChevronDown, ChevronRight, Check, X, Wrench } from "lucide-react";
+import { ChevronDown, ChevronRight, Check, X, Wrench, HelpCircle } from "lucide-react";
 
 export interface ToolCallProps {
   name: string;
   input?: Record<string, unknown>;
   output?: unknown;
-  status: "pending" | "running" | "complete" | "error";
+  status: "pending" | "running" | "complete" | "error" | "waiting";
   error?: string;
   className?: string;
 }
@@ -43,6 +43,12 @@ export function ToolCall({
       label: "Running...",
       color: "text-primary",
       bgColor: "bg-primary/5",
+    },
+    waiting: {
+      icon: <HelpCircle className="w-4 h-4" />,
+      label: "Waiting for response...",
+      color: "text-amber-600",
+      bgColor: "bg-amber-50",
     },
     complete: {
       icon: <Check className="w-4 h-4" />,
@@ -151,7 +157,7 @@ export interface ToolCallsProps {
     name: string;
     args: Record<string, unknown>;
     result?: unknown;
-    status: "pending" | "running" | "complete" | "error";
+    status: "pending" | "running" | "complete" | "error" | "waiting";
     error?: string;
   }>;
   className?: string;
