@@ -68,6 +68,7 @@ This project's UI is built with React + shadcn/ui + Tailwind for a clean, modern
 - Avoid `any` type
 - Rely on type inference; avoid explicit types unless needed for exports/clarity
 - Use parallel tool calls when applicable
+- **Never co-author yourself in git commits** - no `Co-Authored-By: Claude` lines
 
 ## Tech Stack
 

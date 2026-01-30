@@ -21,12 +21,14 @@ import { Icon } from "@/components/icons/Icon";
 import { ModelSelector } from "@/components/chat/ModelSelector";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
 import { ContextChips, ChipAction } from "@/components/chat/ContextChips";
+import { QuestionPrompt } from "@/components/chat/QuestionPrompt";
 import { useChatStore } from "@/stores/chat";
 import { useSettingsStore } from "@/stores/settings";
 import { useRobloxStore, ConnectionStatus } from "@/stores/roblox";
 import { usePluginStore } from "@/stores/plugin";
 import { useAuthStore } from "@/stores/auth";
 import { useChat } from "@/lib/ai/providers";
+import { setAskUserHandler } from "@/lib/roblox/tools";
 import { cn } from "@/lib/utils";
 import { ArrowUp, Square, CheckCircle2, Download, FolderOpen, RefreshCw } from "lucide-react";
 
@@ -333,7 +335,21 @@ function StatusBadge({ status }: { status: ConnectionStatus }) {
 export function Home() {
   const [input, setInput] = useState("");
   const [activeChips, setActiveChips] = useState<ChipAction[]>([]);
-  const { messages, isStreaming, error, addMessage, updateMessage, addToolCall, updateToolCall, setStreaming, setError } = useChatStore();
+  const {
+    messages,
+    isStreaming,
+    error,
+    pendingQuestion,
+    addMessage,
+    updateMessage,
+    addToolCall,
+    updateToolCall,
+    setStreaming,
+    setError,
+    setPendingQuestion,
+    setQuestionResolver,
+    answerQuestion,
+  } = useChatStore();
   const { hasApiKey } = useSettingsStore();
   const { status: studioStatus, startPolling } = useRobloxStore();
   const { sendMessage } = useChat();
@@ -343,6 +359,25 @@ export function Home() {
     const cleanup = startPolling();
     return cleanup;
   }, [startPolling]);
+
+  // Set up the ask_user handler
+  useEffect(() => {
+    setAskUserHandler((questions) => {
+      return new Promise((resolve) => {
+        setPendingQuestion({
+          id: crypto.randomUUID(),
+          toolCallId: "",
+          messageId: "",
+          questions,
+        });
+        setQuestionResolver(resolve);
+      });
+    });
+
+    return () => {
+      setAskUserHandler(null);
+    };
+  }, [setPendingQuestion, setQuestionResolver]);
 
   const hasConfiguredProvider = hasApiKey("openai") || hasApiKey("anthropic") || useAuthStore.getState().isOAuthAuthenticated();
   const isConnected = studioStatus === "connected";
@@ -626,6 +661,17 @@ export function Home() {
               </div>
             </Message>
           ))}
+
+          {/* Pending question from AI */}
+          {pendingQuestion && (
+            <div className="max-w-2xl mx-auto">
+              <QuestionPrompt
+                questions={pendingQuestion.questions}
+                onSubmit={answerQuestion}
+                disabled={false}
+              />
+            </div>
+          )}
         </ChatContainerContent>
         
         {/* Scroll to bottom button */}
