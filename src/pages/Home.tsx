@@ -20,6 +20,7 @@ import { BotAvatar, UserAvatar } from "@/components/icons/Avatars";
 import { Icon } from "@/components/icons/Icon";
 import { ModelSelector } from "@/components/chat/ModelSelector";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { ContextChips, ChipAction } from "@/components/chat/ContextChips";
 import { useChatStore } from "@/stores/chat";
 import { useSettingsStore } from "@/stores/settings";
 import { useRobloxStore, ConnectionStatus } from "@/stores/roblox";
@@ -163,13 +164,13 @@ function ConnectionScreen({ status }: { status: ConnectionStatus }) {
           {/* Main heading */}
           <div className="text-center space-y-2">
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-primary/10 mb-4">
-              <Loader variant="dots" size="lg" />
+              <Loader variant="wave" size="lg" />
             </div>
             <h1 className="text-2xl font-semibold text-foreground">
               Connecting to Roblox Studio
             </h1>
             <p className="text-muted-foreground">
-              <Loader variant="loading-dots" text="Waiting for connection" size="sm" />
+              <Loader variant="terminal" text="Waiting for connection" size="sm" />
             </p>
           </div>
 
@@ -331,6 +332,7 @@ function StatusBadge({ status }: { status: ConnectionStatus }) {
 
 export function Home() {
   const [input, setInput] = useState("");
+  const [activeChips, setActiveChips] = useState<ChipAction[]>([]);
   const { messages, isStreaming, error, addMessage, updateMessage, addToolCall, updateToolCall, setStreaming, setError } = useChatStore();
   const { hasApiKey } = useSettingsStore();
   const { status: studioStatus, startPolling } = useRobloxStore();
@@ -418,6 +420,14 @@ export function Home() {
     setInput(suggestion);
   };
 
+  const handleChipClick = (chipId: ChipAction) => {
+    setActiveChips(prev =>
+      prev.includes(chipId)
+        ? prev.filter(c => c !== chipId)
+        : [...prev, chipId]
+    );
+  };
+
   const handleStop = () => {
     setStreaming(false);
   };
@@ -454,7 +464,12 @@ export function Home() {
             </div>
 
             {/* Input */}
-            <div className="relative">
+            <div className="space-y-3">
+              <ContextChips
+                onChipClick={handleChipClick}
+                activeChips={activeChips}
+                disabled={isStreaming || !hasConfiguredProvider}
+              />
               <PromptInput
                 value={input}
                 onValueChange={setInput}
@@ -603,7 +618,7 @@ export function Home() {
                 ) : (
                   isStreaming && message.role === "assistant" && !message.toolCalls?.length && (
                     <div className="flex items-center gap-2 h-8">
-                      <Loader variant="dots" size="sm" />
+                      <Loader variant="wave" size="sm" />
                       <span className="text-sm text-muted-foreground">Thinking...</span>
                     </div>
                   )
@@ -621,7 +636,12 @@ export function Home() {
 
       {/* Input */}
       <div className="border-t border-border/50 bg-card/50 backdrop-blur-sm px-4 py-4">
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto space-y-3">
+          <ContextChips
+            onChipClick={handleChipClick}
+            activeChips={activeChips}
+            disabled={isStreaming}
+          />
           <PromptInput
             value={input}
             onValueChange={setInput}

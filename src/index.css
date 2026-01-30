@@ -4,32 +4,30 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme {
-  /* Light mode cozy theme */
-  --color-background: #FAFAFA;
-  --color-foreground: #1A1A1A;
+  /* Monochrome theme - Black & White */
+  --color-background: #FFFFFF;
+  --color-foreground: #0A0A0A;
   --color-card: #FFFFFF;
-  --color-card-foreground: #1A1A1A;
+  --color-card-foreground: #0A0A0A;
   --color-popover: #FFFFFF;
-  --color-popover-foreground: #1A1A1A;
-  --color-primary: #8B7CF6;
+  --color-popover-foreground: #0A0A0A;
+  --color-primary: #0A0A0A;
   --color-primary-foreground: #FFFFFF;
-  --color-secondary: #F4F4F5;
-  --color-secondary-foreground: #18181B;
-  --color-muted: #F4F4F5;
-  --color-muted-foreground: #71717A;
-  --color-accent: #F4F4F5;
-  --color-accent-foreground: #18181B;
-  --color-destructive: #EF4444;
+  --color-secondary: #F5F5F5;
+  --color-secondary-foreground: #0A0A0A;
+  --color-muted: #F5F5F5;
+  --color-muted-foreground: #737373;
+  --color-accent: #F5F5F5;
+  --color-accent-foreground: #0A0A0A;
+  --color-destructive: #DC2626;
   --color-destructive-foreground: #FFFFFF;
-  --color-border: #E4E4E7;
-  --color-input: #E4E4E7;
-  --color-ring: #8B7CF6;
+  --color-border: #E5E5E5;
+  --color-input: #E5E5E5;
+  --color-ring: #0A0A0A;
 
-  /* Roblox-inspired accent colors */
-  --color-roblox-blue: #00A2FF;
-  --color-roblox-green: #00B06F;
-  --color-studio-connected: #22C55E;
-  --color-studio-disconnected: #A1A1AA;
+  /* Status colors (minimal) */
+  --color-studio-connected: #16A34A;
+  --color-studio-disconnected: #A3A3A3;
 
   /* Radius */
   --radius-sm: 0.5rem;
