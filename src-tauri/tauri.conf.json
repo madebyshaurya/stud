@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "stud",
+  "productName": "Stud",
   "version": "0.1.0",
   "identifier": "com.shauryagupta.stud",
   "build": {
@@ -12,9 +12,18 @@
   "app": {
     "windows": [
       {
-        "title": "stud",
-        "width": 800,
-        "height": 600
+        "title": "Stud",
+        "label": "main",
+        "width": 1100,
+        "height": 750,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true,
+        "resizable": true,
+        "decorations": true,
+        "transparent": false,
+        "shadow": true,
+        "focus": true
       }
     ],
     "security": {

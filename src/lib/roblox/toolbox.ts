@@ -23,7 +23,9 @@ export interface ToolboxSearchResult {
   nextPageCursor?: string;
 }
 
-const CATALOG_API = "https://catalog.roblox.com/v1/search/items";
+// Use the details endpoint which returns full asset info
+const CATALOG_SEARCH_API = "https://catalog.roblox.com/v1/search/items";
+const CATALOG_DETAILS_API = "https://catalog.roblox.com/v1/search/items/details";
 const THUMBNAILS_API = "https://thumbnails.roblox.com/v1/assets";
 
 export type AssetCategory = "Model" | "Decal" | "Audio" | "Plugin" | "MeshPart";
@@ -43,6 +45,98 @@ export async function searchToolbox(
 ): Promise<ToolboxSearchResult> {
   const assetType = CATEGORY_TO_TYPE[category];
 
+  // Use the details endpoint which returns name, creator, etc.
+  const params = new URLSearchParams({
+    Category: "1", // Marketplace category
+    Keyword: query,
+    AssetType: assetType.toString(),
+    Limit: limit.toString(),
+    SortType: "0", // Relevance
+    SortAggregation: "3",
+    SortOrder: "2", // Descending
+    IncludeNotForSale: "false",
+  });
+
+  console.log("[Toolbox] Searching:", query, "category:", category);
+
+  const response = await tauriFetch(`${CATALOG_DETAILS_API}?${params}`, {
+    method: "GET",
+    headers: {
+      "User-Agent": "Stud/1.0",
+      "Accept": "application/json",
+    },
+  });
+
+  if (!response.ok) {
+    console.error("[Toolbox] Search failed:", response.status);
+    // Fallback to alternate search
+    return searchToolboxFallback(query, category, limit);
+  }
+
+  const rawData = await response.json();
+  console.log("[Toolbox] Raw response:", JSON.stringify(rawData, null, 2).slice(0, 2000));
+
+  // Parse the response - details endpoint returns more info
+  const data = rawData as {
+    data?: Array<{
+      id: number;
+      itemType?: string;
+      assetType?: number;
+      name?: string;
+      description?: string;
+      creatorName?: string;
+      creatorType?: string;
+      creatorTargetId?: number;
+      price?: number;
+      favoriteCount?: number;
+    }>;
+    nextPageCursor?: string;
+  };
+
+  if (!data.data || !Array.isArray(data.data)) {
+    console.error("[Toolbox] Unexpected response format, trying fallback");
+    return searchToolboxFallback(query, category, limit);
+  }
+
+  const assets: ToolboxAsset[] = data.data.map((item) => ({
+    id: item.id,
+    name: item.name ?? `Asset ${item.id}`,
+    description: item.description ?? "",
+    creatorName: item.creatorName ?? "Unknown",
+    creatorId: item.creatorTargetId ?? 0,
+    favoriteCount: item.favoriteCount ?? 0,
+    created: "",
+    updated: "",
+  }));
+
+  console.log("[Toolbox] Parsed assets:", assets.map(a => ({ id: a.id, name: a.name, creator: a.creatorName })));
+
+  // Fetch thumbnails for the assets
+  if (assets.length > 0) {
+    try {
+      const thumbnails = await fetchThumbnails(assets.map((a) => a.id));
+      assets.forEach((asset) => {
+        asset.thumbnailUrl = thumbnails[asset.id];
+      });
+    } catch (err) {
+      console.error("[Toolbox] Thumbnail fetch error:", err);
+    }
+  }
+
+  return {
+    assets,
+    nextPageCursor: data.nextPageCursor,
+  };
+}
+
+// Fallback: Search for IDs first, then fetch details individually
+async function searchToolboxFallback(
+  query: string,
+  category: AssetCategory = "Model",
+  limit = 10
+): Promise<ToolboxSearchResult> {
+  const assetType = CATEGORY_TO_TYPE[category];
+
   const params = new URLSearchParams({
     keyword: query,
     assetType: assetType.toString(),
@@ -51,7 +145,9 @@ export async function searchToolbox(
     sortOrder: "Desc",
   });
 
-  const response = await tauriFetch(`${CATALOG_API}?${params}`, {
+  console.log("[Toolbox] Using fallback search...");
+
+  const response = await tauriFetch(`${CATALOG_SEARCH_API}?${params}`, {
     method: "GET",
     headers: {
       "User-Agent": "Stud/1.0",
@@ -62,37 +158,26 @@ export async function searchToolbox(
     throw new Error(`Toolbox search failed: ${response.status}`);
   }
 
-  const data = await response.json() as {
-    data: Array<{
-      id: number;
-      name: string;
-      description: string;
-      creatorName: string;
-      creatorTargetId: number;
-      favoriteCount: number;
-      created: string;
-      updated: string;
-    }>;
+  const rawData = await response.json();
+  const data = rawData as {
+    data?: Array<{ id: number }>;
     nextPageCursor?: string;
   };
 
-  const assets: ToolboxAsset[] = data.data.map((item) => ({
-    id: item.id,
-    name: item.name,
-    description: item.description || "",
-    creatorName: item.creatorName,
-    creatorId: item.creatorTargetId,
-    favoriteCount: item.favoriteCount || 0,
-    created: item.created,
-    updated: item.updated,
-  }));
+  if (!data.data || !Array.isArray(data.data)) {
+    return { assets: [] };
+  }
 
-  // Fetch thumbnails for the assets
-  if (assets.length > 0) {
-    const thumbnails = await fetchThumbnails(assets.map((a) => a.id));
-    assets.forEach((asset) => {
-      asset.thumbnailUrl = thumbnails[asset.id];
-    });
+  // Fetch details for each asset
+  const assetIds = data.data.map(item => item.id);
+  const assets: ToolboxAsset[] = [];
+
+  // Batch fetch details using economy API
+  for (const id of assetIds.slice(0, limit)) {
+    const details = await getAssetDetails(id);
+    if (details) {
+      assets.push(details);
+    }
   }
 
   return {

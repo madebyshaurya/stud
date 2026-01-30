@@ -32,7 +32,8 @@ pub fn run() {
             get_bridge_status,
             plugin::check_plugin_installed,
             plugin::install_plugin,
-            plugin::get_plugins_path
+            plugin::get_plugins_path,
+            plugin::check_roblox_studio_installed
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

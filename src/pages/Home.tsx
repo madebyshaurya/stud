@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import {
   PromptInput,
   PromptInputTextarea,
@@ -20,8 +20,13 @@ import { BotAvatar, UserAvatar } from "@/components/icons/Avatars";
 import { Icon } from "@/components/icons/Icon";
 import { ModelSelector } from "@/components/chat/ModelSelector";
 import { SettingsDialog } from "@/components/settings/SettingsDialog";
+import { SettingsPanel } from "@/components/SettingsPanel";
 import { ContextChips, ChipAction } from "@/components/chat/ContextChips";
 import { QuestionPrompt } from "@/components/chat/QuestionPrompt";
+import { InstancePicker } from "@/components/chat/InstancePicker";
+import { ChatActions } from "@/components/QuickActions";
+import { CommandPalette } from "@/components/CommandPalette";
+import { EmptyState } from "@/components/EmptyState";
 import { useChatStore } from "@/stores/chat";
 import { useSettingsStore } from "@/stores/settings";
 import { useRobloxStore, ConnectionStatus } from "@/stores/roblox";
@@ -29,14 +34,41 @@ import { usePluginStore } from "@/stores/plugin";
 import { useAuthStore } from "@/stores/auth";
 import { useChat } from "@/lib/ai/providers";
 import { setAskUserHandler } from "@/lib/roblox/tools";
+import { useAppShortcuts } from "@/hooks/useKeyboardShortcuts";
+import { improvePrompt } from "@/lib/ai/prompt-improver";
 import { cn } from "@/lib/utils";
-import { ArrowUp, Square, CheckCircle2, Download, FolderOpen, RefreshCw } from "lucide-react";
+import { ArrowUp, Square, CheckCircle2, Download, FolderOpen, RefreshCw, Box, FileText, Globe, Play, ListTodo, Settings, Sparkles } from "lucide-react";
 
 const SUGGESTIONS = [
+  // Gameplay systems
   "Create an NPC that follows players",
   "Add a currency system with DataStore",
   "Make a gun that shoots projectiles",
   "Design a shop GUI with items",
+  "Build a checkpoint system for an obby",
+  "Create a leaderboard that saves scores",
+  "Make doors that require keys to open",
+  "Add a day/night cycle with lighting",
+  // UI & Effects
+  "Design a main menu with play button",
+  "Create floating damage numbers",
+  "Add a health bar above players",
+  "Make a settings menu with sound toggle",
+  // Mechanics
+  "Create a sprinting system with stamina",
+  "Add double jump ability",
+  "Make a grappling hook tool",
+  "Build a vehicle spawner",
+  // World building
+  "Find free models for a forest scene",
+  "Create a teleporter between areas",
+  "Add ambient sounds to the game",
+  "Make parts that change color on touch",
+  // Advanced
+  "Set up a round-based game system",
+  "Create an inventory system",
+  "Add achievements that unlock badges",
+  "Build a trading system between players",
 ];
 
 // Step indicator for connection flow
@@ -168,7 +200,7 @@ function ConnectionScreen({ status }: { status: ConnectionStatus }) {
             <div className="inline-flex items-center justify-center w-16 h-16 rounded-3xl bg-primary/10 mb-4">
               <Loader variant="wave" size="lg" />
             </div>
-            <h1 className="text-2xl font-semibold text-foreground">
+            <h1 className="text-2xl font-heading text-foreground">
               Connecting to Roblox Studio
             </h1>
             <p className="text-muted-foreground">
@@ -335,6 +367,8 @@ function StatusBadge({ status }: { status: ConnectionStatus }) {
 export function Home() {
   const [input, setInput] = useState("");
   const [activeChips, setActiveChips] = useState<ChipAction[]>([]);
+  const [isImproving, setIsImproving] = useState(false);
+  const [displayedSuggestions, setDisplayedSuggestions] = useState<string[]>([]);
   const {
     messages,
     isStreaming,
@@ -349,16 +383,36 @@ export function Home() {
     setPendingQuestion,
     setQuestionResolver,
     answerQuestion,
+    clearMessages,
   } = useChatStore();
   const { hasApiKey } = useSettingsStore();
   const { status: studioStatus, startPolling } = useRobloxStore();
   const { sendMessage } = useChat();
+  const inputRef = useRef<HTMLTextAreaElement>(null);
+
+  // Keyboard shortcuts
+  useAppShortcuts({
+    onClearChat: () => {
+      if (messages.length > 0 && !isStreaming) {
+        clearMessages();
+      }
+    },
+    onFocusInput: () => {
+      inputRef.current?.focus();
+    },
+  });
 
   // Start polling for connection on mount
   useEffect(() => {
     const cleanup = startPolling();
     return cleanup;
   }, [startPolling]);
+
+  // Shuffle and pick random suggestions on mount and when messages clear
+  useEffect(() => {
+    const shuffled = [...SUGGESTIONS].sort(() => Math.random() - 0.5);
+    setDisplayedSuggestions(shuffled.slice(0, 4));
+  }, [messages.length === 0]);
 
   // Set up the ask_user handler
   useEffect(() => {
@@ -381,6 +435,26 @@ export function Home() {
 
   const hasConfiguredProvider = hasApiKey("openai") || hasApiKey("anthropic") || useAuthStore.getState().isOAuthAuthenticated();
   const isConnected = studioStatus === "connected";
+
+  // Improve prompt handler
+  const handleImprovePrompt = useCallback(async () => {
+    if (!input.trim() || isImproving || isStreaming) return;
+
+    setIsImproving(true);
+    try {
+      const result = await improvePrompt(input);
+      if (result.improved && result.improved !== input) {
+        setInput(result.improved);
+      }
+      if (result.error) {
+        console.warn("[Home] Prompt improvement error:", result.error);
+      }
+    } catch (err) {
+      console.error("[Home] Failed to improve prompt:", err);
+    } finally {
+      setIsImproving(false);
+    }
+  }, [input, isImproving, isStreaming]);
 
   const handleSubmit = useCallback(async () => {
     if (!input.trim() || isStreaming) return;
@@ -409,8 +483,8 @@ export function Home() {
 
     console.log("[Home] Submitting message:", userMessage, "with context:", chipContext);
 
-    // Add user message (show without context prefix for cleaner UI)
-    addMessage({ role: "user", content: userMessage });
+    // Add user message (show without context prefix for cleaner UI, but store chips)
+    addMessage({ role: "user", content: userMessage, contextChips: activeChips.length > 0 ? [...activeChips] : undefined });
 
     // Add placeholder for assistant
     const assistantId = addMessage({ role: "assistant", content: "" });
@@ -515,7 +589,7 @@ export function Home() {
           <div className="w-full max-w-2xl space-y-8">
             {/* Welcome message */}
             <div className="text-center space-y-2">
-              <h1 className="text-3xl font-semibold text-foreground">
+              <h1 className="text-3xl font-heading text-foreground">
                 What would you like to build?
               </h1>
               <p className="text-muted-foreground">
@@ -535,16 +609,30 @@ export function Home() {
                 onValueChange={setInput}
                 onSubmit={handleSubmit}
                 isLoading={isStreaming}
-                className="rounded-2xl border-2 border-border shadow-lg bg-card"
+                className={cn(
+                  "rounded-2xl border-2 border-border shadow-lg bg-card",
+                  isImproving && "relative overflow-hidden"
+                )}
               >
+                {/* Skeleton shimmer overlay when improving */}
+                {isImproving && (
+                  <div className="absolute inset-0 pointer-events-none z-10">
+                    <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+                  </div>
+                )}
                 <PromptInputTextarea
                   placeholder={
-                    hasConfiguredProvider
-                      ? "Ask me anything about Roblox development..."
-                      : "Configure an API key in settings to start..."
+                    isImproving
+                      ? "Improving your prompt..."
+                      : hasConfiguredProvider
+                        ? "Ask me anything about Roblox development..."
+                        : "Configure an API key in settings to start..."
                   }
-                  disabled={!hasConfiguredProvider}
-                  className="min-h-[60px] text-base"
+                  disabled={!hasConfiguredProvider || isImproving}
+                  className={cn(
+                    "min-h-[60px] text-base",
+                    isImproving && "opacity-60"
+                  )}
                 />
                 <PromptInputActions className="justify-between px-3 py-2">
                   <div className="flex items-center gap-1">
@@ -553,9 +641,32 @@ export function Home() {
                         <Icon name="link" size="sm" />
                       </Button>
                     </PromptInputAction>
+                    <InstancePicker
+                      onSelect={(path) => setInput((prev) => prev + `@${path} `)}
+                    />
                   </div>
                   <div className="flex items-center gap-2">
                     <ModelSelector disabled={!hasConfiguredProvider} />
+                    {/* Improve Prompt Button */}
+                    <PromptInputAction tooltip="Improve prompt for Stud">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className={cn(
+                          "h-8 w-8 rounded-lg transition-all",
+                          isImproving && "animate-pulse",
+                          input.trim() && !isImproving && !isStreaming && "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                        )}
+                        onClick={handleImprovePrompt}
+                        disabled={!input.trim() || isImproving || isStreaming || !hasConfiguredProvider}
+                      >
+                        {isImproving ? (
+                          <Loader variant="circular" size="sm" />
+                        ) : (
+                          <Sparkles className="h-4 w-4" />
+                        )}
+                      </Button>
+                    </PromptInputAction>
                     <Button
                       size="icon"
                       className="h-8 w-8 rounded-lg"
@@ -575,7 +686,7 @@ export function Home() {
 
             {/* Suggestions */}
             <div className="flex flex-wrap justify-center gap-2">
-              {SUGGESTIONS.map((suggestion) => (
+              {displayedSuggestions.map((suggestion) => (
                 <PromptSuggestion
                   key={suggestion}
                   onClick={() => handleSuggestionClick(suggestion)}
@@ -614,11 +725,22 @@ export function Home() {
       <header className="flex items-center justify-between px-6 py-3 border-b border-border/50 bg-card/50 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <LogoMark className="w-8 h-8" />
-          <span className="text-lg font-semibold">Stud</span>
+          <span className="text-lg font-logo">Stud</span>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <StatusBadge status={studioStatus} />
-          <SettingsDialog />
+          <div className="h-4 w-px bg-border mx-1" />
+          <ChatActions
+            onClear={clearMessages}
+            disabled={messages.length === 0 || isStreaming}
+          />
+          <SettingsPanel
+            trigger={
+              <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Settings className="w-4 h-4" />
+              </Button>
+            }
+          />
         </div>
       </header>
 
@@ -651,6 +773,11 @@ export function Home() {
             </div>
           )}
 
+          {/* Empty state when no messages */}
+          {messages.length === 0 && !isStreaming && (
+            <EmptyState className="py-8" />
+          )}
+
           {messages.map((message) => (
             <Message key={message.id} className="gap-4">
               {message.role === "assistant" ? (
@@ -659,6 +786,24 @@ export function Home() {
                 <UserAvatar />
               )}
               <div className="flex-1 space-y-3">
+                {/* Context chips indicator for user messages */}
+                {message.role === "user" && message.contextChips && message.contextChips.length > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {message.contextChips.map((chip) => (
+                      <span
+                        key={chip}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 text-xs font-medium bg-neutral-100 text-neutral-600 rounded-full"
+                      >
+                        {chip === "search-models" && <><Box className="w-3 h-3" /> Models</>}
+                        {chip === "docs" && <><FileText className="w-3 h-3" /> Docs</>}
+                        {chip === "web" && <><Globe className="w-3 h-3" /> Web</>}
+                        {chip === "run-code" && <><Play className="w-3 h-3" /> Run</>}
+                        {chip === "plan" && <><ListTodo className="w-3 h-3" /> Plan</>}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
                 {/* Tool calls (shown before content for assistant) */}
                 {message.role === "assistant" && message.toolCalls && message.toolCalls.length > 0 && (
                   <ToolCalls toolCalls={message.toolCalls} />
@@ -697,6 +842,14 @@ export function Home() {
               />
             </div>
           )}
+
+          {/* Streaming indicator */}
+          {isStreaming && !pendingQuestion && (
+            <div className="flex items-center gap-3 px-4 py-3 bg-muted/30 rounded-xl max-w-fit mx-auto">
+              <Loader variant="wave" size="sm" />
+              <span className="text-sm text-muted-foreground">AI is working...</span>
+            </div>
+          )}
         </ChatContainerContent>
         
         {/* Scroll to bottom button */}
@@ -718,11 +871,24 @@ export function Home() {
             onValueChange={setInput}
             onSubmit={handleSubmit}
             isLoading={isStreaming}
-            className="rounded-2xl border shadow-sm"
+            className={cn(
+              "rounded-2xl border shadow-sm",
+              isImproving && "relative overflow-hidden"
+            )}
           >
+            {/* Skeleton shimmer overlay when improving */}
+            {isImproving && (
+              <div className="absolute inset-0 pointer-events-none z-10">
+                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/60 to-transparent animate-shimmer" />
+              </div>
+            )}
             <PromptInputTextarea
-              placeholder="Ask a follow-up..."
-              className="min-h-[44px] text-base"
+              placeholder={isImproving ? "Improving your prompt..." : "Ask a follow-up..."}
+              className={cn(
+                "min-h-[44px] text-base",
+                isImproving && "opacity-60"
+              )}
+              disabled={isImproving}
             />
             <PromptInputActions className="justify-between px-3 py-2">
               <div className="flex items-center gap-1">
@@ -731,9 +897,32 @@ export function Home() {
                     <Icon name="link" size="sm" />
                   </Button>
                 </PromptInputAction>
+                <InstancePicker
+                  onSelect={(path) => setInput((prev) => prev + `@${path} `)}
+                />
               </div>
               <div className="flex items-center gap-2">
                 <ModelSelector />
+                {/* Improve Prompt Button */}
+                <PromptInputAction tooltip="Improve prompt for Stud (AI enhances your message)">
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={cn(
+                      "h-8 w-8 rounded-lg transition-all",
+                      isImproving && "animate-pulse",
+                      input.trim() && !isImproving && !isStreaming && "text-amber-500 hover:text-amber-600 hover:bg-amber-50"
+                    )}
+                    onClick={handleImprovePrompt}
+                    disabled={!input.trim() || isImproving || isStreaming}
+                  >
+                    {isImproving ? (
+                      <Loader variant="circular" size="sm" />
+                    ) : (
+                      <Sparkles className="h-4 w-4" />
+                    )}
+                  </Button>
+                </PromptInputAction>
                 {isStreaming ? (
                   <Button
                     size="icon"
@@ -758,6 +947,16 @@ export function Home() {
           </PromptInput>
         </div>
       </div>
+
+      {/* Command Palette */}
+      <CommandPalette
+        onCommand={(cmd, payload) => {
+          if (cmd === "prompt" && typeof payload === "string") {
+            setInput(payload);
+          }
+        }}
+        onClearChat={clearMessages}
+      />
     </div>
   );
 }

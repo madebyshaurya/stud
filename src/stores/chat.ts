@@ -14,12 +14,20 @@ export interface Message {
   role: "user" | "assistant";
   content: string;
   toolCalls?: ToolCall[];
+  contextChips?: string[]; // Which context chips were applied to this message
   createdAt: Date;
+}
+
+export interface QuestionOption {
+  label: string;
+  value?: string; // If different from label
+  imageUrl?: string;
+  description?: string;
 }
 
 export interface Question {
   question: string;
-  options?: string[];
+  options?: (string | QuestionOption)[];
   type: "single" | "multi" | "text";
 }
 

@@ -554,7 +554,12 @@ export const robloxToolboxSearch = tool({
   description: `Search the Roblox Creator Store for free models, decals, audio, or plugins.
 
 Use this to find pre-made assets that can be inserted into the game.
-Returns a list of assets with names, descriptions, and popularity info.
+Returns a list of assets with names, descriptions, creators, IDs, and THUMBNAIL URLs.
+
+IMPORTANT: When presenting search results to the user via roblox_ask_user:
+- Use RICH OPTIONS with imageUrl for thumbnails (shows a visual grid)
+- Format: { label: "Model Name", value: "assetId", imageUrl: "thumbnailUrl", description: "by Creator" }
+- After user picks, use the value (asset ID) with roblox_insert_asset
 
 Examples:
 - Search for "car" models
@@ -574,12 +579,21 @@ Examples:
 
     return {
       count: result.assets.length,
+      note: "Use roblox_ask_user with RICH OPTIONS format: { label, value, imageUrl, description } to show thumbnails. The value should be the asset ID.",
       results: result.assets.map((asset) => ({
         id: asset.id,
         name: asset.name,
+        thumbnailUrl: asset.thumbnailUrl,
         description: asset.description.slice(0, 100),
         creator: asset.creatorName,
         favorites: asset.favoriteCount,
+        // Pre-formatted for ask_user rich options
+        askUserOption: {
+          label: asset.name,
+          value: String(asset.id),
+          imageUrl: asset.thumbnailUrl,
+          description: `by ${asset.creatorName}`,
+        },
       })),
     };
   },
@@ -630,8 +644,22 @@ Note: Only free models can be inserted. Some models may contain scripts.`,
 // Agentic Tools
 // ============================================================================
 
+// Types for ask_user options
+interface QuestionOption {
+  label: string;
+  value?: string;
+  imageUrl?: string;
+  description?: string;
+}
+
+interface AskUserQuestion {
+  question: string;
+  options?: (string | QuestionOption)[];
+  type: "single" | "multi" | "text";
+}
+
 // Global store reference for ask_user tool
-let askUserHandler: ((questions: Array<{ question: string; options?: string[]; type: "single" | "multi" | "text" }>) => Promise<(string | string[])[]>) | null = null;
+let askUserHandler: ((questions: AskUserQuestion[]) => Promise<(string | string[])[]>) | null = null;
 
 export const setAskUserHandler = (handler: typeof askUserHandler) => {
   askUserHandler = handler;
@@ -645,22 +673,40 @@ Use this tool when:
 - There are multiple valid approaches and you want user input
 - You need specific parameters or values the user should decide
 - Confirming destructive actions before executing
+- Showing toolbox search results for user to pick from
 
 You can ask 1-4 questions at once. Each question can be:
 - Single choice: User picks one option
 - Multi choice: User can select multiple options
 - Text: User types a free-form answer
 
+Options can be simple strings OR objects with:
+- label: Display text
+- value: Return value (defaults to label)
+- imageUrl: Thumbnail URL to show
+- description: Short description
+
+When showing toolbox results, use the rich option format with imageUrl from thumbnails.
+
 Examples:
 - "What color should the car be?" with options ["Red", "Blue", "Green"]
-- "Do you want me to delete these parts?" with options ["Yes", "No"]
-- "What should the NPC say when clicked?" as text input`,
+- Pick a model with options [{ label: "Car", value: "12345", imageUrl: "..." }]`,
   inputSchema: z.object({
     questions: z
       .array(
         z.object({
           question: z.string().describe("The question to ask the user"),
-          options: z.array(z.string()).optional().describe("Options for single/multi choice"),
+          options: z.array(
+            z.union([
+              z.string(),
+              z.object({
+                label: z.string().describe("Display text"),
+                value: z.string().optional().describe("Return value (defaults to label)"),
+                imageUrl: z.string().optional().describe("Thumbnail URL"),
+                description: z.string().optional().describe("Short description"),
+              }),
+            ])
+          ).optional().describe("Options for single/multi choice - can be strings or {label, value, imageUrl, description}"),
           type: z.enum(["single", "multi", "text"]).default("text").describe("Question type"),
         })
       )
@@ -671,7 +717,7 @@ Examples:
   execute: async ({
     questions,
   }: {
-    questions: Array<{ question: string; options?: string[]; type: "single" | "multi" | "text" }>
+    questions: AskUserQuestion[]
   }) => {
     if (!askUserHandler) {
       return { error: "Question handler not initialized" }

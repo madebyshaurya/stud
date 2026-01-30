@@ -59,7 +59,7 @@ export function Logo({ className }: LogoProps) {
       className={cn("flex items-center gap-3", className)}
     >
       <LogoMark className="w-9 h-9" />
-      <span className="text-2xl font-bold text-foreground tracking-tight">
+      <span className="text-2xl font-logo text-foreground tracking-tight">
         Stud
       </span>
     </div>

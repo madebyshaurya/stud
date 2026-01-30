@@ -12,7 +12,13 @@
         { "url": "https://chatgpt.com/**" },
         { "url": "https://auth.openai.com/**" },
         { "url": "https://api.openai.com/**" },
-        { "url": "https://models.dev/**" }
+        { "url": "https://models.dev/**" },
+        { "url": "https://catalog.roblox.com/**" },
+        { "url": "https://thumbnails.roblox.com/**" },
+        { "url": "https://economy.roblox.com/**" },
+        { "url": "https://apis.roblox.com/**" },
+        { "url": "https://*.rbxcdn.com/**" },
+        { "url": "https://rbxcdn.com/**" }
       ]
     }
   ]
